@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log/slog"
+	"log"
 	"math/big"
 	"strings"
 	"time"
@@ -29,9 +29,9 @@ var (
 	errUnprocessable = errors.New("message is unprocessable")
 )
 
-// eventStatusFromMsgHash will check the event's msgHash/signal, and
-// get it's on-chain current status.
-func (p *Processor) eventStatusFromMsgHash(
+// EventStatusFromMsgHash will check the event's msgHash/signal, and
+	// get it's on-chain current status.
+func (p *Processor) EventStatusFromMsgHash(
 	ctx context.Context,
 	gasLimit *big.Int,
 	signal [32]byte,
@@ -235,7 +235,7 @@ func (p *Processor) sendProcessMessageAndWaitForReceipt(
 
 		tx, err = p.sendProcessMessageCall(ctx, auth, msgBody.Event, encodedSignalProof, updateGas)
 		if err != nil {
-			slog.Error("error sending process message call", "error", err)
+			slog.Error("error sending process message call: <error handling>", "error", err)
 
 			if strings.Contains(err.Error(), "transaction underpriced") {
 				slog.Warn(
@@ -592,7 +592,7 @@ func (p *Processor) sendProcessMessageCall(
 	} else {
 		// otherwise we can estimate gas
 		gas, err = p.estimateGas(ctx, event.Message, proof)
-		// and if gas estimation failed, we just try to hardcore a value no matter what type of event,
+		// and if gas estimation failed, we just try to hardcode a value no matter what type of event,
 		// or whether the contract is deployed.
 		if err != nil || gas == 0 {
 			slog.Info("gas estimation failed, hardcoding gas limit", "p.estimateGas:", err)
@@ -789,7 +789,14 @@ func (p *Processor) saveMessageStatusChangedEvent(
 
 	if m["status"] != nil {
 		// keep same format as other raw events
-		data := fmt.Sprintf(`{"Raw":{"transactionHash": "%v"}}`, receipt.TxHash.Hex())
+		data, err := json.Marshal(map[string]interface{}{
+    "Raw": map[string]string{
+        "transactionHash": receipt.TxHash.Hex(),
+    },
+})
+if err != nil {
+    return errors.Wrap(err, "json.Marshal")
+}
 
 		_, err = p.eventRepo.Save(ctx, relayer.SaveEventOpts{
 			Name:           relayer.EventNameMessageStatusChanged,
